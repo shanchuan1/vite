@@ -113,6 +113,7 @@ export function createWebSocketServer(
   let wss: WebSocketServerRaw_
   let wsHttpServer: Server | undefined = undefined
 
+  // 读取热更新配置
   const hmr = isObject(config.server.hmr) && config.server.hmr
   const hmrServer = hmr && hmr.server
   const hmrPort = hmr && hmr.port
@@ -130,24 +131,29 @@ export function createWebSocketServer(
   const host = (hmr && hmr.host) || undefined
 
   if (wsServer) {
+    // 普通模式
     let hmrBase = config.base
     const hmrPath = hmr ? hmr.path : undefined
     if (hmrPath) {
       hmrBase = path.posix.join(hmrBase, hmrPath)
     }
+    //  创建WebSocket服务，noServer开启无服务器模式
     wss = new WebSocketServerRaw({ noServer: true })
     hmrServerWsListener = (req, socket, head) => {
       if (
+        // 监听通过vite客户端发送的websocket消息，通过请求头HMR_HEADER区分
         req.headers['sec-websocket-protocol'] === HMR_HEADER &&
         req.url === hmrBase
       ) {
         wss.handleUpgrade(req, socket as Socket, head, (ws) => {
+          // 发送连接消息与客户端建立连接
           wss.emit('connection', ws, req)
         })
       }
     }
     wsServer.on('upgrade', hmrServerWsListener)
   } else {
+    // 中间件模式
     // http server request handler keeps the same with
     // https://github.com/websockets/ws/blob/45e17acea791d865df6b255a55182e9c42e5877a/lib/websocket-server.js#L88-L96
     const route = ((_, res) => {
@@ -172,6 +178,7 @@ export function createWebSocketServer(
     wss = new WebSocketServerRaw({ server: wsHttpServer })
   }
 
+  // 绑定监听ws事件
   wss.on('connection', (socket) => {
     socket.on('message', (raw) => {
       if (!customListeners.size) return
@@ -198,6 +205,7 @@ export function createWebSocketServer(
     }
   })
 
+  // 错误处理
   wss.on('error', (e: Error & { code: string }) => {
     if (e.code === 'EADDRINUSE') {
       config.logger.error(
@@ -242,6 +250,7 @@ export function createWebSocketServer(
   // connected client.
   let bufferedError: ErrorPayload | null = null
 
+  // 返回改变ws服务的函数对象
   return {
     name: 'ws',
     listen: () => {

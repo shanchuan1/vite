@@ -149,9 +149,11 @@ export class ModuleGraph {
   }
 
   onFileChange(file: string): void {
+     // 通过文件地址搜索模块
     const mods = this.getModulesByFile(file)
     if (mods) {
       const seen = new Set<ModuleNode>()
+      // 遍历找出的模块，清除其转换后的结果
       mods.forEach((mod) => {
         this.invalidateModule(mod, seen)
       })

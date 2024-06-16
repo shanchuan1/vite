@@ -464,7 +464,7 @@ export async function _createServer(
   const httpServer = middlewareMode
     ? null
     : await resolveHttpServer(serverConfig, middlewares, httpsOptions)
-
+    // 创建websocket服务端
   const ws = createWebSocketServer(httpServer, config, httpsOptions)
   const hot = createHMRBroadcaster()
     .addChannel(ws)
@@ -482,6 +482,7 @@ export async function _createServer(
 
   // eslint-disable-next-line eqeqeq
   const watchEnabled = serverConfig.watch !== null
+  // 借助chokidar创建实例watcher来监听文件的change
   const watcher = watchEnabled
     ? (chokidar.watch(
         // config file dependencies and env file might be outside of root
@@ -749,8 +750,10 @@ export async function _createServer(
     type: 'create' | 'delete' | 'update',
     file: string,
   ) => {
+    // 是否启用热更新
     if (serverConfig.hmr !== false) {
       try {
+        // 执行热更新方法
         await handleHMRUpdate(type, file, server)
       } catch (err) {
         hot.send({
@@ -784,11 +787,19 @@ export async function _createServer(
     await onHMRUpdate(isUnlink ? 'delete' : 'create', file)
   }
 
+  /* 启动文件监听
+  change
+  add
+  unlink
+  */
   watcher.on('change', async (file) => {
     file = normalizePath(file)
     await container.watchChange(file, { event: 'update' })
     // invalidate module graph cache on file change
+    // 修改使文件的缓存失效
     moduleGraph.onFileChange(file)
+    // onFileChange用来清除模块里的transformResult字段的，使之前的模块已有的转换缓存失效。
+    // 关于 Vite 的缓存机制这块，Vite会对依赖进行强缓存，对项目逻辑代码进行协商缓存
     await onHMRUpdate('update', file)
   })
 
@@ -858,6 +869,13 @@ export async function _createServer(
   // proxy
   const { proxy } = serverConfig
   if (proxy) {
+    /*
+    httpServer：通过http来创建http的服务
+    const { createServer } = await import('node:http')
+    return createServer(app)
+    解析proxy对象内所有配置的代理信息最后通过proxy.web(req, res, options)代理
+
+    */
     const middlewareServer =
       (isObject(middlewareMode) ? middlewareMode.server : null) || httpServer
     middlewares.use(proxyMiddleware(middlewareServer, proxy, config))
@@ -888,6 +906,14 @@ export async function _createServer(
     middlewares.use(servePublicMiddleware(server, publicFiles))
   }
 
+  /* 文件转换的处理中间件 js（vue，jsx，tsx等），css, html, json, npm依赖
+  1. 通过请求url判断请求类型的文件
+  2. 服务器对请求url读取对应文件内容通过transformRequest方法处理，可被浏览器使用的esm内容直接返回，不可则被处理返回  【解析路径-resolve -> 加载文件-load -> 代码转译-transform（完全可控）】
+  3. 对于npm依赖文件(这些文件的url地址参数不同会被@vite/client带上[?v=hash]参数字段标识)，同时响应头返回cacheControl：'max-age=31536000,immutable'做强缓存处理，而非npm文件则响应头返回cacheControl：'no-cache'禁用缓存
+  4. 同时npm依赖文件内容会被注入sourceMappingURL信息
+  5. 所有请求的文件都会被带上etag指纹标识
+  6. 最后所有请求内容都会针对类型响应不同的Content-Type，并响应200的status且返回内容
+  */
   // main transform middleware
   middlewares.use(transformMiddleware(server))
 
@@ -895,6 +921,7 @@ export async function _createServer(
   middlewares.use(serveRawFsMiddleware(server))
   middlewares.use(serveStaticMiddleware(server))
 
+  // htmlFallbackMiddleware 中间件 对于根目录 / 的请求，重定向到/index.html
   // html fallback
   if (config.appType === 'spa' || config.appType === 'mpa') {
     middlewares.use(
@@ -906,11 +933,15 @@ export async function _createServer(
     )
   }
 
+  // 运行配置后挂钩
+  //这是在html中间件之前应用的，因此用户中间件可以
+  //提供自定义内容，而不是index.html。
   // run post config hooks
   // This is applied before the html middleware so that user middleware can
   // serve custom content instead of index.html.
   postHooks.forEach((fn) => fn && fn())
 
+  // 处理首页index.html的响应
   if (config.appType === 'spa' || config.appType === 'mpa') {
     // transform index.html
     middlewares.use(indexHtmlMiddleware(root, server))

@@ -117,6 +117,7 @@ export function getShortName(file: string, root: string): string {
     : file
 }
 
+// 发送消息给客户端，根据此次修改文件的类型告诉客户端是要刷新还是重新加载文件
 export async function handleHMRUpdate(
   type: 'create' | 'delete' | 'update',
   file: string,
@@ -126,6 +127,7 @@ export async function handleHMRUpdate(
   const shortFile = getShortName(file, config.root)
 
   const isConfig = file === config.configFile
+  // 配置文件被vite依赖地址
   const isConfigDependency = config.configFileDependencies.some(
     (name) => file === name,
   )
@@ -133,6 +135,7 @@ export async function handleHMRUpdate(
   const isEnv =
     config.inlineConfig.envFile !== false &&
     getEnvFilesForMode(config.mode, config.envDir).includes(file)
+    // 如果是配置文件vit.config.js, 环境变量模式改变，则重启vite服务
   if (isConfig || isConfigDependency || isEnv) {
     // auto restart server
     debugHmr?.(`[config change] ${colors.dim(shortFile)}`)
@@ -154,6 +157,7 @@ export async function handleHMRUpdate(
 
   debugHmr?.(`[file change] ${colors.dim(shortFile)}`)
 
+  // 客户端本身不能进行热更新
   // (dev only) the client itself cannot be hot updated.
   if (file.startsWith(withTrailingSlash(normalizedClientDir))) {
     hot.send({
@@ -164,6 +168,7 @@ export async function handleHMRUpdate(
     return
   }
 
+   // 从moduleGraph中获取与本次变更文件有关的模块
   const mods = new Set(moduleGraph.getModulesByFile(file))
   if (type === 'create') {
     for (const mod of moduleGraph._hasResolveFailedErrorModules) {
@@ -178,6 +183,7 @@ export async function handleHMRUpdate(
 
   // check if any plugin wants to perform custom HMR handling
   const timestamp = Date.now()
+  // 声明热更新上下文
   const hmrContext: HmrContext = {
     file,
     timestamp,
@@ -187,6 +193,7 @@ export async function handleHMRUpdate(
   }
 
   if (type === 'update') {
+    // 遍历插件，执行插件的handleHotUpdate钩子
     for (const hook of config.getSortedPluginHooks('handleHotUpdate')) {
       const filteredModules = await hook(hmrContext)
       if (filteredModules) {
@@ -195,8 +202,10 @@ export async function handleHMRUpdate(
     }
   }
 
+   // 如果没有模块变更，则直接返回
   if (!hmrContext.modules.length) {
     // html file cannot be hot updated
+    // html文件也是刷新页面和重启服务
     if (file.endsWith('.html')) {
       config.logger.info(colors.green(`page reload `) + colors.dim(shortFile), {
         clear: true,
@@ -215,6 +224,7 @@ export async function handleHMRUpdate(
     return
   }
 
+  // 向客户端推送热更新变更模块信息
   updateModules(shortFile, hmrContext.modules, timestamp, server)
 }
 

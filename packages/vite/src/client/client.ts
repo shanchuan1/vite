@@ -69,11 +69,13 @@ try {
   console.error(`[vite] failed to connect to websocket (${error}). `)
 }
 
+// 创建WebSocket客户端，此client文件会被注入至index.html被浏览器请求获取执行，会调用此文件的入口函数setupWebSocket
 function setupWebSocket(
   protocol: string,
   hostAndPath: string,
   onCloseWithoutOpen?: () => void,
 ) {
+  // 创建ws客户端
   const socket = new WebSocket(`${protocol}://${hostAndPath}`, 'vite-hmr')
   let isOpened = false
 
@@ -86,6 +88,7 @@ function setupWebSocket(
     { once: true },
   )
 
+  //	接受websocket服务端信息
   // Listen for messages
   socket.addEventListener('message', async ({ data }) => {
     handleMessage(JSON.parse(data))
@@ -169,6 +172,12 @@ const hmrClient = new HMRClient(
   },
 )
 
+
+/* 客户端接受消息的处理
+客户端接收到消息后，根据消息区分是刷新页面还是重新加载文件，
+加载文件的话是加载css类型还是js类型文件。如果是css，则根据返回的path直接重新加载.
+如果是js类型文件，则会先重新加载文件，然后执行在当前js文件类注册的hmr hook。
+*/
 async function handleMessage(payload: HMRPayload) {
   switch (payload.type) {
     case 'connected':
