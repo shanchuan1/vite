@@ -63,6 +63,7 @@ export function send(
     }
   }
 
+  // 给node_modules内被依赖缓存的文件注入source map
   // inject source map reference
   if (map && 'version' in map && map.mappings) {
     if (type === 'js' || type === 'css') {

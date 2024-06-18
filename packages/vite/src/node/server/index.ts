@@ -461,6 +461,8 @@ export async function _createServer(
   )
 
   const middlewares = connect() as Connect.Server
+  // 创建vite服务
+  // http ， https， http2
   const httpServer = middlewareMode
     ? null
     : await resolveHttpServer(serverConfig, middlewares, httpsOptions)
@@ -502,9 +504,11 @@ export async function _createServer(
     container.resolveId(url, undefined, { ssr }),
   )
 
+  // 创建插件容器
   const container = await createPluginContainer(config, moduleGraph, watcher)
   const closeHttpServer = createServerCloseFn(httpServer)
 
+  // 对index.html文件内容转换
   const devHtmlTransformFn = createDevHtmlTransformFn(config)
 
   const onCrawlEndCallbacks: (() => void)[] = []
@@ -958,13 +962,15 @@ export async function _createServer(
   // this code is to avoid calling buildStart multiple times
   let initingServer: Promise<void> | undefined
   let serverInited = false
+  // 在启动完开发服务器的时候，ws, server完成后
+  // 就马上对 node_modules 下的代码做打包，这个也叫 deps optimize，依赖优化
   const initServer = async () => {
     if (serverInited) return
     if (initingServer) return initingServer
 
     initingServer = (async function () {
       await container.buildStart({})
-      // start deps optimizer after all container plugins are ready
+      // start deps optimizer after all container plugins are ready  在所有容器插件就绪后启动deps优化器
       if (isDepsOptimizerEnabled(config, false)) {
         await initDepsOptimizer(config, server)
       }

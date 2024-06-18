@@ -203,9 +203,11 @@ export function transformMiddleware(
           const type = isDirectCSSRequest(url) ? 'css' : 'js'
           const isDep =
             DEP_VERSION_RE.test(url) || depsOptimizer?.isOptimizedDepUrl(url)
+
+            // send函数  作为vite服务器响应请求的统一方法
           return send(req, res, result.code, type, {
             etag: result.etag,
-            // allow browser to cache npm deps!
+            // allow browser to cache npm deps! 允许浏览器缓存npm deps！
             cacheControl: isDep ? 'max-age=31536000,immutable' : 'no-cache',
             headers: server.config.server.headers,
             map: result.map,

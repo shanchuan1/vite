@@ -230,7 +230,7 @@ async function createDepsOptimizer(
         ;(async () => {
           try {
             debug?.(colors.green(`scanning for dependencies...`))
-
+            // 扫描项目所有依赖
             discover = discoverProjectDependencies(config)
             const deps = await discover.result
             discover = undefined
