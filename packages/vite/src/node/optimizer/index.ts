@@ -450,6 +450,8 @@ export function depsLogString(qualifiedIds: string[]): string {
 /**
  * Internally, Vite uses this function to prepare a optimizeDeps run. When Vite starts, we can get
  * the metadata and start the server without waiting for the optimizeDeps processing to be completed
+ * 在内部，Vite使用此功能来准备optimizeDeps运行。当Vite启动，我们可以
+ * 获取metadata的数据并启动服务器，而无需等待optimizeDeps处理完成
  */
 export function runOptimizeDeps(
   resolvedConfig: ResolvedConfig,
@@ -466,7 +468,14 @@ export function runOptimizeDeps(
     command: 'build',
   }
 
+  /* depsCacheDir：获取deps文件路径
+  如：D:/ShanChuan/vite-v3/vue-project/node_modules/.vite/deps
+  */
   const depsCacheDir = getDepsCacheDir(resolvedConfig, ssr)
+
+  /* processingCacheDir：获取处理依赖过程中要写入deps文件的路径
+  如：'D:/ShanChuan/vite-v3/vue-project/node_modules/.vite/deps_temp_6bdd5ad5'
+  */
   const processingCacheDir = getProcessingDepsCacheDir(resolvedConfig, ssr)
 
   // Create a temporary directory so we don't need to delete optimized deps
@@ -477,6 +486,9 @@ export function runOptimizeDeps(
   // a hint for Node.js
   // all files in the cache directory should be recognized as ES modules
   debug?.(colors.green(`creating package.json in ${processingCacheDir}`))
+  /*
+  在processingCacheDir路径下写入package.json文件
+  */
   fs.writeFileSync(
     path.resolve(processingCacheDir, 'package.json'),
     `{\n  "type": "module"\n}\n`,
@@ -484,6 +496,7 @@ export function runOptimizeDeps(
 
   const metadata = initDepsOptimizerMetadata(config, ssr)
 
+  // 生成浏览器依赖请求query参数的hash
   metadata.browserHash = getOptimizedBrowserHash(
     metadata.hash,
     depsFromOptimizedDepInfo(depsInfo),
@@ -528,6 +541,7 @@ export function runOptimizeDeps(
 
       // Write metadata file, then commit the processing folder to the global deps cache
       // Rewire the file paths from the temporary processing dir to the final deps cache dir
+      // 写入_metadata.json文件至node_modules/.vite/deps内
       const dataPath = path.join(processingCacheDir, METADATA_FILENAME)
       debug?.(
         colors.green(`creating ${METADATA_FILENAME} in ${processingCacheDir}`),
@@ -593,6 +607,7 @@ export function runOptimizeDeps(
 
   const start = performance.now()
 
+  // esbuild优化依赖的执行函数  准备将依赖写入.vite/deps文件夹下
   const preparedRun = prepareEsbuildOptimizerRun(
     resolvedConfig,
     depsInfo,
@@ -615,6 +630,11 @@ export function runOptimizeDeps(
     return context
       .rebuild()
       .then((result) => {
+        /* meta
+         得到esbuild打包编译后的结果路径
+         inputs：输入给esbuild编译打包的依赖路径
+         outputs: esbuild编译打包后的结果输出的路径(.vite/deps路径下)
+        */
         const meta = result.metafile!
 
         // the paths in `meta.outputs` are relative to `process.cwd()`
@@ -630,7 +650,11 @@ export function runOptimizeDeps(
             processingCacheDir,
           )
 
+          /* exportsData
+          原依赖文件(如vue.js源码文件)exports导出的文件内容
+          */
           const { exportsData, ...info } = depsInfo[id]
+          // 添加到metadata.json文件记录依赖的预构建
           addOptimizedDepInfo(metadata, 'optimized', {
             ...info,
             // We only need to hash the output.imports in to check for stability, but adding the hash
@@ -653,6 +677,7 @@ export function runOptimizeDeps(
           })
         }
 
+        /* 记录js.map文件 */
         for (const o of Object.keys(meta.outputs)) {
           if (!jsMapExtensionRE.test(o)) {
             const id = path
@@ -777,14 +802,22 @@ async function prepareEsbuildOptimizerRun(
 
   const context = await esbuild.context({
     absWorkingDir: process.cwd(),
-    entryPoints: Object.keys(flatIdDeps),
+    entryPoints: Object.keys(flatIdDeps), // 打包源code文件的路径地址作为打包的入口
+    /*  flatIdDeps: 依赖源文件的地址
+    {
+      "lodash-es": "D:/ShanChuan/vite-v3/vue-project/node_modules/.pnpm/lodash-es@4.17.21/node_modules/lodash-es/lodash.js",
+      pinia: "D:/ShanChuan/vite-v3/vue-project/node_modules/.pnpm/pinia@2.1.7_vue@3.4.29/node_modules/pinia/dist/pinia.mjs",
+      vue: "D:/ShanChuan/vite-v3/vue-project/node_modules/.pnpm/vue@3.4.29/node_modules/vue/dist/vue.runtime.esm-bundler.js",
+      "vue-router": "D:/ShanChuan/vite-v3/vue-project/node_modules/.pnpm/vue-router@4.3.3_vue@3.4.29/node_modules/vue-router/dist/vue-router.mjs",
+    }
+    */
     bundle: true,
     // We can't use platform 'neutral', as esbuild has custom handling
     // when the platform is 'node' or 'browser' that can't be emulated
     // by using mainFields and conditions
     platform,
     define,
-    format: 'esm',
+    format: 'esm', // esm模块格式输出
     // See https://github.com/evanw/esbuild/issues/1921#issuecomment-1152991694
     banner:
       platform === 'node'
@@ -797,7 +830,7 @@ async function prepareEsbuildOptimizerRun(
     logLevel: 'error',
     splitting: true,
     sourcemap: true,
-    outdir: processingCacheDir,
+    outdir: processingCacheDir, // 输出的地址: node_modules/.vite/deps
     ignoreAnnotations: true,
     metafile: true,
     plugins,

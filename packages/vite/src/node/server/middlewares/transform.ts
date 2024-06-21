@@ -165,11 +165,18 @@ export function transformMiddleware(
         isHTMLProxy(url)
       ) {
         // strip ?import
+        // 去除 ？import
         url = removeImportQuery(url)
         // Strip valid id prefix. This is prepended to resolved Ids that are
         // not valid browser import specifiers by the importAnalysis plugin.
+        // 去除有效的 ID 前缀。
+        // 这是由 importAnalysis 插件在解析的 ID 不符合浏览器导入规范时添加的前缀
         url = unwrapId(url)
 
+        /*
+        css在浏览器自动对import导入的这种请求，会被transform响应为js文件处理
+        如果是css文件请求则不同处理
+        */
         // for CSS, we differentiate between normal CSS requests and imports
         if (isCSSRequest(url)) {
           if (
@@ -195,6 +202,13 @@ export function transformMiddleware(
         }
 
         // resolve, load and transform using the plugin container
+        // 使用插件容器解析、加载和转换
+        // js,css,vue,(dependencies已经被esbuild预处理好了在.vite/deps目录下), import导入的图片资源文件(svg,png,jpg)请问都会被响应为js文件
+        /* result = {code, map, etag}
+
+        transformRequest作用
+        1. 补全code中不完整的url路径(dependencies会添加query参数?v=hash, import的图片资源会添加query参数?import),这些query参数都是为了vite开发服务器在后序的请求处理作为标识
+        */
         const result = await transformRequest(url, server, {
           html: req.headers.accept?.includes('text/html'),
         })

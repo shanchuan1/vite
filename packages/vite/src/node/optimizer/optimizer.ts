@@ -84,6 +84,7 @@ async function createDepsOptimizer(
   const ssr = false
   const sessionTimestamp = Date.now().toString()
 
+  // 加载node_modules/.vite/deps/下的构建缓存的记录_metadata.json文件内容
   const cachedMetadata = await loadCachedDepOptimizationMetadata(config, ssr)
 
   let debounceProcessingHandle: NodeJS.Timeout | undefined
@@ -96,6 +97,13 @@ async function createDepsOptimizer(
   const options = getDepOptimizationConfig(config, ssr)
 
   const { noDiscovery, holdUntilCrawlEnd } = options
+  /*
+  {
+    holdUntilCrawlEnd: true,
+    force: undefined,
+    esbuildOptions: { preserveSymlinks: false }
+  }
+  */
 
   const depsOptimizer: DepsOptimizer = {
     metadata,
@@ -222,9 +230,10 @@ async function createDepsOptimizer(
     if (noDiscovery) {
       // We don't need to scan for dependencies or wait for the static crawl to end
       // Run the first optimization run immediately
+      // 如果已记录的metadata文件的依赖未过期，则直接使用缓存
       runOptimizer()
     } else {
-      // Important, the scanner is dev only
+      // Important, the scanner is dev only 仅在dev开发环境进行依赖扫描
       depsOptimizer.scanProcessing = new Promise((resolve) => {
         // Runs in the background in case blocking high priority tasks
         ;(async () => {
@@ -233,9 +242,25 @@ async function createDepsOptimizer(
             // 扫描项目所有依赖
             discover = discoverProjectDependencies(config)
             const deps = await discover.result
+            /* deps结果如：
+            {
+              lodash-es:'D:/ShanChuan/vite-v3/vue-project/node_modules/.pnpm/lodash-es@4.17.21/node_modules/lodash-es/lodash.js'
+              pinia:'D:/ShanChuan/vite-v3/vue-project/node_modules/.pnpm/pinia@2.1.7_vue@3.4.29/node_modules/pinia/dist/pinia.mjs'
+              vue:'D:/ShanChuan/vite-v3/vue-project/node_modules/.pnpm/vue@3.4.29/node_modules/vue/dist/vue.runtime.esm-bundler.js'
+              vue-router: 'D:/ShanChuan/vite-v3/vue-project/node_modules/.pnpm/vue-router@4.3.3_vue@3.4.29/node_modules/vue-router/dist/vue-router.mjs'
+            }
+            扫描的都是项目下dependencies的依赖
+            "dependencies": {
+              "lodash-es": "^4.17.21",
+              "pinia": "^2.1.7",
+              "vue": "^3.4.21",
+              "vue-router": "^4.3.0"
+            },
+            */
             discover = undefined
 
             const manuallyIncluded = Object.keys(manuallyIncludedDepsInfo)
+            // 记录scan扫描已发现的依赖
             discoveredDepsWhileScanning.push(
               ...Object.keys(metadata.discovered).filter(
                 (dep) => !deps[dep] && !manuallyIncluded.includes(dep),
@@ -245,28 +270,46 @@ async function createDepsOptimizer(
             // Add these dependencies to the discovered list, as these are currently
             // used by the preAliasPlugin to support aliased and optimized deps.
             // This is also used by the CJS externalization heuristics in legacy mode
+            /*
+            将这些依赖项添加到查找到的列表中，因为它们当前为
+            由preAliasPlugin用于支持别名化和优化的dep。
+            这也被遗留模式中的CJS外部化启发法使用
+            */
             for (const id of Object.keys(deps)) {
               if (!metadata.discovered[id]) {
+                // metadata文件记录被发现的依赖deps
                 addMissingDep(id, deps[id])
               }
             }
 
+            // 已被扫描记录在metadata文件的deps，
             const knownDeps = prepareKnownDeps()
             startNextDiscoveredBatch()
 
             // For dev, we run the scanner and the first optimization
             // run on the background
+            /* runOptimizeDeps
+            最终将扫描得出的deps进行打包构建并写入到node_modules/.vite/deps文件夹内
+            */
             optimizationResult = runOptimizeDeps(config, knownDeps, ssr)
 
             // If the holdUntilCrawlEnd stratey is used, we wait until crawling has
             // ended to decide if we send this result to the browser or we need to
             // do another optimize step
+            // 如果使用了holdUntilDrawlEnd策略，我们将等待爬网
+            //结束，决定是将此结果发送到浏览器，还是需要
+            //执行另一个优化步骤
             if (!holdUntilCrawlEnd) {
               // If not, we release the result to the browser as soon as the scanner
               // is done. If the scanner missed any dependency, and a new dependency
               // is discovered while crawling static imports, then there will be a
               // full-page reload if new common chunks are generated between the old
               // and new optimized deps.
+              // 如果没有，我们会在扫描后立即将结果发布到浏览器
+              //完成。如果扫描仪遗漏了任何依赖项，以及一个新的依赖项
+              //在爬网静态导入时发现，则会有
+              //如果在旧组块之间生成新的公共组块，则重新加载整个页面
+              //以及新的优化deps。
               optimizationResult.result.then((result) => {
                 // Check if the crawling of static imports has already finished. In that
                 // case, the result is handled by the onCrawlEnd callback

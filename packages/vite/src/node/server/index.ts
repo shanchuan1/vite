@@ -501,7 +501,7 @@ export async function _createServer(
     : createNoopWatcher(resolvedWatchOptions)
 
   const moduleGraph: ModuleGraph = new ModuleGraph((url, ssr) =>
-    container.resolveId(url, undefined, { ssr }),
+    container.resolveId(url, undefined, { ssr }),1
   )
 
   // 创建插件容器
@@ -972,6 +972,7 @@ export async function _createServer(
       await container.buildStart({})
       // start deps optimizer after all container plugins are ready  在所有容器插件就绪后启动deps优化器
       if (isDepsOptimizerEnabled(config, false)) {
+        // 开始启动deps优化
         await initDepsOptimizer(config, server)
       }
       warmupFiles(server)

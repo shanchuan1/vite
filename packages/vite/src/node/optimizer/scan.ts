@@ -202,6 +202,10 @@ async function computeEntries(config: ResolvedConfig) {
   return entries
 }
 
+/**
+ * @description: 准备esbuild的扫描函数
+ * @return {*}
+ */
 async function prepareEsbuildScanner(
   config: ResolvedConfig,
   entries: string[],
@@ -213,6 +217,11 @@ async function prepareEsbuildScanner(
 
   if (scanContext?.cancelled) return
 
+  /*plugin
+  esbuild扫描打包会用到的插件
+  如：对html文件处理的支持
+
+  */
   const plugin = esbuildScanPlugin(config, container, deps, missing, entries)
 
   const { plugins = [], ...esbuildOptions } =
@@ -233,19 +242,19 @@ async function prepareEsbuildScanner(
     }
   }
 
-  return await esbuild.context({
-    absWorkingDir: process.cwd(),
-    write: false,
-    stdin: {
+  return await esbuild.context({ // context 是 esbuild 中用于创建构建上下文的一个方法，这样可以保持构建的状态，从而可以多次增量地构建
+    absWorkingDir: process.cwd(), // 返回当前工作目录的路径。这里设置了 esbuild 的工作目录为当前执行 Node.js 进程的目录。
+    write: false, // 选项为 false 表示 esbuild 不会将构建结果写入磁盘，而是将其保留在内存中。
+    stdin: { // 配置项用于从标准输入传递文件内容，而不是从文件系统读取文件
       contents: entries.map((e) => `import ${JSON.stringify(e)}`).join('\n'),
-      loader: 'js',
+      loader: 'js', // 'js' 指定 stdin 的内容使用 JavaScript 加载器。
     },
-    bundle: true,
-    format: 'esm',
-    logLevel: 'silent',
-    plugins: [...plugins, plugin],
-    ...esbuildOptions,
-    tsconfigRaw,
+    bundle: true, //  选项为 true 表示 esbuild 将所有输入文件打包成一个单一的输出文件
+    format: 'esm', // 指定输出文件的格式为 ES 模块（ESM
+    logLevel: 'silent', //  silent 表示构建过程中不输出日志信息
+    plugins: [...plugins, plugin], // 指定构建过程中使用的插件
+    ...esbuildOptions, // esbuild 配置选项
+    tsconfigRaw, // 用于 TypeScript 配置的原始 JSON 对象
   })
 }
 
